@@ -8,7 +8,11 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Crypto Libraries -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.whirlpool.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/crypto-js@4.1.1/build/crypto-js-camellia.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jsencrypt/3.2.1/jsencrypt.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/elliptic/6.5.4/elliptic.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/node-forge@1.3.1/dist/forge.min.js"></script>
     <script src="/socket.io/socket.io.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
@@ -85,7 +89,43 @@
                                 <label for="message-input" class="block text-sm font-medium text-indigo-300">1. Your Message (M)</label>
                                 <textarea id="message-input" rows="3" class="w-full mt-1 bg-gray-700 border border-gray-600 rounded-md p-2 text-white focus:ring-indigo-500 focus:border-indigo-500">This is a secret message.</textarea>
                             </div>
-                            <div id="control-buttons" class="grid grid-cols-2 gap-3">
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label for="algo-encrypt" class="block text-xs font-medium text-gray-400">Encryption</label>
+                                    <select id="algo-encrypt" class="w-full bg-gray-700 border border-gray-600 rounded-md p-1 text-white">
+                                        <option value="rsa">RSA</option>
+                                        <option value="ecc">ECC</option>
+                                        <option value="aes">AES</option>
+                                        <option value="caesar">Caesar</option>
+                                        <option value="shift">Shift</option>
+                                        <option value="transposition">Transposition</option>
+                                        <option value="affine">Affine</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label for="algo-sign" class="block text-xs font-medium text-gray-400">Signature</label>
+                                    <select id="algo-sign" class="w-full bg-gray-700 border border-gray-600 rounded-md p-1 text-white">
+                                        <option value="rsa">RSA</option>
+                                        <option value="ecc">ECC</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label for="algo-hash" class="block text-xs font-medium text-gray-400">Hash</label>
+                                    <select id="algo-hash" class="w-full bg-gray-700 border border-gray-600 rounded-md p-1 text-white">
+                                        <option value="sha256">SHA-256</option>
+                                        <option value="sha512">SHA-512</option>
+                                        <option value="whirlpool">Whirlpool</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label for="algo-keyx" class="block text-xs font-medium text-gray-400">Key Exchange</label>
+                                    <select id="algo-keyx" class="w-full bg-gray-700 border border-gray-600 rounded-md p-1 text-white">
+                                        <option value="rsa">RSA</option>
+                                        <option value="ecc">ECC</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div id="control-buttons" class="grid grid-cols-2 gap-3 mt-2">
                                 <button id="btn-gen-keys" class="control-button bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg">Generate Keys</button>
                                 <button id="btn-hash" class="control-button bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg" disabled>Hash Message</button>
                                 <button id="btn-sign" class="control-button bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg" disabled>Sign Hash</button>
