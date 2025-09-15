@@ -178,7 +178,101 @@ document.addEventListener('DOMContentLoaded', () => {
         if (currentStep === 6) steps.decryptKey.classList.add('active');
         if (currentStep === 7) steps.decryptMsg.classList.add('active');
         if (currentStep === 8) steps.verify.classList.add('active');
+
+        // Update algorithm flowchart
+        renderAlgoFlowchart();
     };
+
+    // --- Algorithm Flowchart Logic ---
+    const algoFlowSteps = {
+        aes: [
+            { label: 'Message', desc: 'Input message (M)' },
+            { label: 'Session Key', desc: 'Generate random AES key' },
+            { label: 'Encrypt', desc: 'Encrypt message with AES key' },
+            { label: 'Send', desc: 'Send ciphertext and key (encrypted)' },
+            { label: 'Decrypt', desc: 'Decrypt ciphertext with AES key' }
+        ],
+        caesar: [
+            { label: 'Message', desc: 'Input message (M)' },
+            { label: 'Shift', desc: 'Choose shift value (e.g., 3)' },
+            { label: 'Encrypt', desc: 'Shift each letter by value' },
+            { label: 'Send', desc: 'Send ciphertext' },
+            { label: 'Decrypt', desc: 'Reverse shift to get message' }
+        ],
+        shift: [
+            { label: 'Message', desc: 'Input message (M)' },
+            { label: 'Shift', desc: 'Choose shift value (e.g., 5)' },
+            { label: 'Encrypt', desc: 'Shift all chars by value' },
+            { label: 'Send', desc: 'Send ciphertext' },
+            { label: 'Decrypt', desc: 'Reverse shift to get message' }
+        ],
+        transposition: [
+            { label: 'Message', desc: 'Input message (M)' },
+            { label: 'Arrange', desc: 'Write in columns (e.g., 5 cols)' },
+            { label: 'Read', desc: 'Read column-wise to get ciphertext' },
+            { label: 'Send', desc: 'Send ciphertext' },
+            { label: 'Decrypt', desc: 'Reverse columns to get message' }
+        ],
+        affine: [
+            { label: 'Message', desc: 'Input message (M)' },
+            { label: 'Keys', desc: 'Choose a, b (e.g., a=5, b=8)' },
+            { label: 'Encrypt', desc: 'Apply affine formula to each letter' },
+            { label: 'Send', desc: 'Send ciphertext' },
+            { label: 'Decrypt', desc: 'Apply inverse affine to get message' }
+        ],
+        rsa: [
+            { label: 'Message', desc: 'Input message (M)' },
+            { label: 'Keygen', desc: 'Generate RSA key pair' },
+            { label: 'Encrypt', desc: 'Encrypt with public key' },
+            { label: 'Send', desc: 'Send ciphertext' },
+            { label: 'Decrypt', desc: 'Decrypt with private key' }
+        ],
+        ecc: [
+            { label: 'Message', desc: 'Input message (M)' },
+            { label: 'Keygen', desc: 'Generate ECC key pair' },
+            { label: 'ECDH', desc: 'Derive shared secret' },
+            { label: 'Encrypt', desc: 'Encrypt with shared secret' },
+            { label: 'Send', desc: 'Send ciphertext' },
+            { label: 'Decrypt', desc: 'Decrypt with shared secret' }
+        ]
+    };
+
+    function renderAlgoFlowchart() {
+        const flowDiv = document.getElementById('algo-flowchart');
+        if (!flowDiv) return;
+        const selected = algoEncrypt.value;
+        const steps = algoFlowSteps[selected] || [];
+        // Map simulation step to flowchart step (approximate)
+        let flowStep = 0;
+        if (currentStep === 0) flowStep = 0;
+        else if (currentStep === 1) flowStep = 0;
+        else if (currentStep === 2) flowStep = 1;
+        else if (currentStep === 3) flowStep = 2;
+        else if (currentStep === 4) flowStep = 3;
+        else if (currentStep === 5) flowStep = 3;
+        else if (currentStep === 6) flowStep = 4;
+        else if (currentStep >= 7) flowStep = steps.length - 1;
+
+        flowDiv.innerHTML = '';
+        if (steps.length === 0) return;
+        // Render steps as boxes with arrows
+        for (let i = 0; i < steps.length; i++) {
+            const step = steps[i];
+            const box = document.createElement('div');
+            box.className = 'flex flex-col items-center mb-2';
+            box.innerHTML = `<div class="px-4 py-2 rounded-lg shadow text-center ${i === flowStep ? 'bg-indigo-500 text-white font-bold scale-105' : 'bg-gray-700 text-gray-200'} transition-all duration-200">${step.label}</div><div class="text-xs text-gray-400 mt-1">${step.desc}</div>`;
+            flowDiv.appendChild(box);
+            if (i < steps.length - 1) {
+                const arrow = document.createElement('div');
+                arrow.innerHTML = '<svg height="24" width="24"><path d="M12 0 v20 M12 20 l-5 -5 M12 20 l5 -5" stroke="#888" stroke-width="2" fill="none"/></svg>';
+                arrow.className = 'mb-2';
+                flowDiv.appendChild(arrow);
+            }
+        }
+    }
+
+    // Update flowchart on algorithm change
+    algoEncrypt.addEventListener('change', renderAlgoFlowchart);
     
     const truncate = (str) => str.length > 30 ? str.substring(0, 30) + '...' : str;
 
