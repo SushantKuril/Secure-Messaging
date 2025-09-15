@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Secure Messaging Simulator</title>
+    <link rel="stylesheet" href="css/style.css">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Crypto Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsencrypt/3.2.1/jsencrypt.min.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- Inspect Message Modal -->
+    <div id="inspect-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
+        <div class="bg-gray-800 rounded-lg p-6 w-11/12 max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-xl font-bold text-white">Message Details</h3>
+                <button id="close-inspect" class="text-gray-400 hover:text-white">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+            <div class="space-y-4">
+                <div>
+                    <h4 class="font-semibold text-gray-300 mb-1">Original Message</h4>
+                    <div id="inspect-original" class="bg-gray-700 p-3 rounded-md font-mono text-sm overflow-x-auto"></div>
+                </div>
+                <div>
+                    <h4 class="font-semibold text-gray-300 mb-1">Message Hash (SHA-256)</h4>
+                    <div id="inspect-hash" class="bg-gray-700 p-3 rounded-md font-mono text-sm overflow-x-auto text-green-400"></div>
+                </div>
+                <div>
+                    <h4 class="font-semibold text-gray-300 mb-1">Encrypted Message (AES-256)</h4>
+                    <div id="inspect-encrypted" class="bg-gray-700 p-3 rounded-md font-mono text-sm overflow-x-auto text-yellow-400"></div>
+                </div>
+                <div>
+                    <h4 class="font-semibold text-gray-300 mb-1">Digital Signature</h4>
+                    <div id="inspect-signature" class="bg-gray-700 p-3 rounded-md font-mono text-sm overflow-x-auto text-purple-400"></div>
+                </div>
+                <div>
+                    <h4 class="font-semibold text-gray-300 mb-1">Encrypted Session Key (RSA-1024)</h4>
+                    <div id="inspect-session-key" class="bg-gray-700 p-3 rounded-md font-mono text-sm overflow-x-auto text-blue-400"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsencrypt/3.3.2/jsencrypt.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-gray-900 text-gray-200 min-h-screen p-4 sm:p-6 lg:p-8">
+    <div class="max-w-7xl mx-auto">
+        <header class="text-center mb-8">
+            <h1 class="text-4xl font-bold text-white">Secure Messaging Application</h1>
+            <p class="text-indigo-400 mt-2">Cryptography in Action: Simulation & Analysis</p>
+        </header>
+
+        <!-- Tabs -->
+        <div class="mb-8 flex justify-center space-x-2 md:space-x-4 bg-gray-800 p-2 rounded-lg">
+            <button id="tab-sim" class="tab-button active px-4 py-2 rounded-md font-semibold w-full md:w-auto">Simulation</button>
+            <button id="tab-chat" class="tab-button px-4 py-2 rounded-md font-semibold w-full md:w-auto">Live Chat</button>
+            <button id="tab-perf" class="tab-button px-4 py-2 rounded-md font-semibold w-full md:w-auto">Performance</button>
+        </div>
+
+        <!-- Main Content -->
+        <main>
+            <!-- Simulation View -->
+            <div id="view-sim">
+                <!-- MITM Attack Simulation Controls -->
+                <div class="flex items-center mb-4">
+                    <input type="checkbox" id="mitm-checkbox" class="mr-2">
+                    <label for="mitm-checkbox" class="text-red-400 font-semibold">Simulate MITM Attack</label>
+                </div>
+                <div class="grid grid-cols-1 xl:grid-cols-5 gap-6">
+                    <!-- Control Panel -->
+                    <div class="xl:col-span-2 bg-gray-800 p-6 rounded-xl shadow-lg">
+                        <h2 class="text-2xl font-bold mb-4 border-b border-gray-600 pb-2">Controls & Data</h2>
+                        <div class="space-y-4">
+                            <div>
+                                <label for="message-input" class="block text-sm font-medium text-indigo-300">1. Your Message (M)</label>
+                                <textarea id="message-input" rows="3" class="w-full mt-1 bg-gray-700 border border-gray-600 rounded-md p-2 text-white focus:ring-indigo-500 focus:border-indigo-500">This is a secret message.</textarea>
+                            </div>
+                            <div id="control-buttons" class="grid grid-cols-2 gap-3">
+                                <button id="btn-gen-keys" class="control-button bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg">Generate Keys</button>
+                                <button id="btn-hash" class="control-button bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg" disabled>Hash Message</button>
+                                <button id="btn-sign" class="control-button bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg" disabled>Sign Hash</button>
+                                <button id="btn-encrypt" class="control-button bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg" disabled>Encrypt</button>
+                                <button id="btn-send" class="control-button bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg col-span-2" disabled>Send to Bob</button>
+                                <button id="btn-decrypt-key" class="control-button bg-sky-600 hover:bg-sky-700 text-white font-bold py-2 px-4 rounded-lg" disabled>Decrypt Key</button>
+                                <button id="btn-decrypt-msg" class="control-button bg-sky-600 hover:bg-sky-700 text-white font-bold py-2 px-4 rounded-lg" disabled>Decrypt Msg</button>
+                                <button id="btn-verify" class="control-button bg-sky-600 hover:bg-sky-700 text-white font-bold py-2 px-4 rounded-lg col-span-2" disabled>Verify Signature</button>
+                                <button id="btn-reset" class="control-button bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg col-span-2">Reset</button>
+                            </div>
+                        </div>
+                         <div id="explanation-box" class="mt-6 p-4 bg-gray-900 rounded-lg min-h-[100px] border border-gray-700">
+                            <h3 class="font-semibold text-lg text-indigo-300">Next Step</h3>
+                            <p class="text-sm mt-1">Click "Generate Keys" to create RSA public/private key pairs for Alice and Bob.</p>
+                        </div>
+                    </div>
+
+                    <!-- Diagram -->
+                    <div class="xl:col-span-3 bg-gray-800 p-6 rounded-xl shadow-lg">
+                        <h2 class="text-2xl font-bold mb-6 text-center">Cryptographic Flow</h2>
+                        <!-- MITM Attacker View (hidden by default) -->
+                        <div id="mitm-attacker-view" class="hidden bg-red-900 bg-opacity-80 rounded-lg p-4 mb-6 border-2 border-red-500">
+                            <h3 class="text-xl font-bold text-red-300 mb-2">Attacker Intercepted the Message!</h3>
+                            <div class="mb-2">
+                                <span class="font-mono text-sm text-gray-200">Ciphertext (C): </span>
+                                <code id="mitm-ciphertext" class="text-xs text-red-200">...</code>
+                            </div>
+                            <div class="mb-2">
+                                <label for="mitm-edit-ciphertext" class="block text-yellow-200 text-xs mb-1">Edit Ciphertext (C) below to tamper:</label>
+                                <textarea id="mitm-edit-ciphertext" rows="2" class="w-full bg-gray-800 border border-yellow-400 rounded-md p-1 text-yellow-200 text-xs"></textarea>
+                            </div>
+                            <button id="btn-tamper" class="bg-yellow-500 hover:bg-yellow-600 text-black font-bold py-2 px-4 rounded-lg">Apply Tampering</button>
+                            <span id="tamper-status" class="ml-4 text-yellow-300 font-semibold"></span>
+                        </div>
+                        <div class="flex flex-col md:flex-row justify-between space-y-8 md:space-y-0 md:space-x-8">
+                            <!-- SENDER: ALICE -->
+                            <div class="flex-1">
+                                <h3 class="text-xl font-bold text-center text-green-400 mb-4">SENDER: ALICE</h3>
+                                <div class="space-y-2 relative">
+                                    <!-- Animated icons for data flow -->
+                                    <div id="anim-icon-m" class="absolute left-[-40px] top-2 z-20 hidden" style="transition: all 0.7s cubic-bezier(.4,2,.6,1);">
+                                        <span class="inline-block bg-green-400 text-green-900 font-bold rounded-full px-2 py-1 text-xs shadow">M</span>
+                                    </div>
+                                    <div id="anim-icon-h" class="absolute left-[-40px] top-[70px] z-20 hidden" style="transition: all 0.7s cubic-bezier(.4,2,.6,1);">
+                                        <span class="inline-block bg-yellow-300 text-yellow-900 font-bold rounded-full px-2 py-1 text-xs shadow">H</span>
+                                    </div>
+                                    <div id="anim-icon-s" class="absolute left-[-40px] top-[140px] z-20 hidden" style="transition: all 0.7s cubic-bezier(.4,2,.6,1);">
+                                        <span class="inline-block bg-purple-300 text-purple-900 font-bold rounded-full px-2 py-1 text-xs shadow">S</span>
+                                    </div>
+                                    <div id="step-msg" class="step-box p-3 rounded-lg bg-gray-700"><strong>M</strong> (Message): <code id="out-msg" class="text-gray-400 text-xs">...</code></div>
+                                    <svg class="h-6 w-full absolute left-0" style="top: 50px;"><path class="connector-line" d="M 50 0 V 24" fill="none" stroke-width="2" stroke-dasharray="4 4"></path></svg>
+                                    <div id="step-hash" class="step-box p-3 rounded-lg bg-gray-700"><strong>H(M)</strong> (Hash): <code id="out-hash" class="text-gray-400 text-xs">...</code></div>
+                                    <svg class="h-6 w-full absolute left-0" style="top: 120px;"><path class="connector-line" d="M 50 0 V 24" fill="none" stroke-width="2" stroke-dasharray="4 4"></path></svg>
+                                    <div id="step-sign" class="step-box p-3 rounded-lg bg-gray-700"><strong>S</strong> (Signature): <code id="out-sign" class="text-gray-400 text-xs">...</code></div>
+                                    <svg class="h-6 w-full absolute left-0" style="top: 190px;"><path class="connector-line" d="M 50 0 V 24" fill="none" stroke-width="2" stroke-dasharray="4 4"></path></svg>
+                                    <div id="step-encrypt" class="step-box p-3 rounded-lg bg-gray-700">
+                                        <div><strong>C</strong> (Ciphertext): <code id="out-c" class="text-gray-400 text-xs">...</code></div>
+                                        <div class="mt-2 pt-2 border-t border-gray-600"><strong>EK</strong> (Encrypted Key): <code id="out-ek" class="text-gray-400 text-xs">...</code></div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- RECEIVER: BOB -->
+                            <div class="flex-1">
+                                <h3 class="text-xl font-bold text-center text-blue-400 mb-4">RECEIVER: BOB</h3>
+                                 <div class="space-y-2 relative">
+                                    <div id="step-receive" class="step-box p-3 rounded-lg bg-gray-700 min-h-[220px]">
+                                        <div><strong>Received C</strong>: <code id="rec-c" class="text-gray-400 text-xs">...</code></div>
+                                        <div class="mt-2 pt-2 border-t border-gray-600"><strong>Received EK</strong>: <code id="rec-ek" class="text-gray-400 text-xs">...</code></div>
+                                    </div>
+                                    <svg class="h-6 w-full absolute left-0" style="top: 220px;"><path class="connector-line" d="M 50 0 V 24" fill="none" stroke-width="2" stroke-dasharray="4 4"></path></svg>
+                                    <div id="step-decrypt-key" class="step-box p-3 rounded-lg bg-gray-700"><strong>Ks</strong> (Session Key): <code id="out-dec-key" class="text-gray-400 text-xs">...</code></div>
+                                    <svg class="h-6 w-full absolute left-0" style="top: 290px;"><path class="connector-line" d="M 50 0 V 24" fill="none" stroke-width="2" stroke-dasharray="4 4"></path></svg>
+                                    <div id="step-decrypt-msg" class="step-box p-3 rounded-lg bg-gray-700"><strong>M'</strong> (Decrypted Msg): <code id="out-dec-msg" class="text-gray-400 text-xs">...</code></div>
+                                    <svg class="h-6 w-full absolute left-0" style="top: 360px;"><path class="connector-line" d="M 50 0 V 24" fill="none" stroke-width="2" stroke-dasharray="4 4"></path></svg>
+                                     <div id="step-verify" class="step-box p-3 rounded-lg bg-gray-700">
+                                        <strong>Verification</strong>: <span id="out-verify" class="font-bold text-xl">PENDING</span>
+                                     </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Live Chat View -->
+            <div id="view-chat" class="hidden">
+                 <div class="grid grid-cols-1 md:grid-cols-4 gap-6 max-w-6xl mx-auto">
+                    <div class="md:col-span-1 bg-gray-800 p-4 rounded-xl shadow-lg">
+                        <h3 class="text-lg font-bold mb-4 text-indigo-300">Users Online</h3>
+                        <ul id="user-list" class="space-y-2">
+                            <!-- User list will be populated here -->
+                        </ul>
+                    </div>
+                    <div class="md:col-span-3 bg-gray-800 p-6 rounded-xl shadow-lg flex flex-col">
+                        <div class="flex-shrink-0 mb-4">
+                            <div class="flex justify-center space-x-2 bg-gray-900 p-1 rounded-lg">
+                                <button id="chat-mode-group" class="chat-mode-button active px-4 py-2 rounded-md font-semibold w-full">Group Chat</button>
+                                <button id="chat-mode-private" class="chat-mode-button px-4 py-2 rounded-md font-semibold w-full">Private Chat</button>
+                            </div>
+                        </div>
+                    <h2 class="text-2xl font-bold mb-4">End-to-End Encrypted Chat</h2>
+                    <div class="border border-gray-700 rounded-lg h-96 p-4 mb-4 flex-grow relative">
+                        <!-- Group Chat Window -->
+                        <div id="group-chat-window" class="overflow-y-auto flex flex-col space-y-4 h-full">
+                            <!-- Group messages appear here -->
+                        </div>
+                        <!-- Private Chat Window -->
+                        <div id="private-chat-window" class="hidden overflow-y-auto flex flex-col space-y-4 h-full">
+                            <!-- Private messages appear here -->
+                        </div>
+                    </div>
+                    <div class="flex space-x-4">
+                        <input type="text" placeholder="Select a user to begin chatting..." class="flex-grow bg-gray-700 border border-gray-600 rounded-md p-2 text-white focus:ring-indigo-500 focus:border-indigo-500" disabled>
+                        <button class="control-button bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg" disabled>Send</button>
+                    </div>
+                </div>
+            </div>
+            </div>
+
+            <!-- Performance View -->
+            <div id="view-perf" class="hidden">
+                 <div class="bg-gray-800 p-6 rounded-xl shadow-lg">
+                    <h2 class="text-2xl font-bold mb-4">Performance Analysis</h2>
+                    <div class="flex items-center space-x-4 mb-6">
+                        <button id="run-perf-test" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg">Run Benchmark</button>
+                         <div id="perf-spinner" class="hidden w-6 h-6 border-4 border-t-transparent border-blue-400 rounded-full animate-spin"></div>
+                        <p id="perf-status" class="text-gray-400">Run tests to measure algorithm performance.</p>
+                    </div>
+                    <div class="mb-8">
+                        <div class="bg-gray-900 p-4 rounded-lg flex flex-col items-center">
+                            <h3 class="text-xl font-bold mb-2 text-indigo-300">Operation Time (ms)</h3>
+                            <p class="text-xs text-gray-400 mb-2 text-center">Time taken for each cryptographic operation. Lower is better.</p>
+                            <canvas id="perf-chart" class="w-full h-80"></canvas>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+                        <div class="bg-gray-900 p-4 rounded-lg flex flex-col items-center">
+                            <h3 class="text-xl font-bold mb-2 text-cyan-300">Throughput (MB/s)</h3>
+                            <p class="text-xs text-gray-400 mb-2 text-center">How much data can be processed per second. Higher is better.</p>
+                            <canvas id="perf-throughput-chart" class="w-full h-80"></canvas>
+                        </div>
+                        <div class="bg-gray-900 p-4 rounded-lg flex flex-col items-center">
+                            <h3 class="text-xl font-bold mb-2 text-purple-300">Key Size vs. Performance</h3>
+                            <p class="text-xs text-gray-400 mb-2 text-center">Visualizes the trade-off between security (key size) and speed for RSA.</p>
+                            <canvas id="perf-keysize-chart" class="w-full h-80"></canvas>
+                        </div>
+                    </div>
+                    <div class="bg-gray-900 p-4 rounded-lg mb-8">
+                        <h3 class="text-xl font-bold mb-4 text-indigo-300">Analysis</h3>
+                        <p id="perf-analysis" class="text-gray-400">Run a benchmark to see a visual comparison of cryptographic algorithm performance. The chart displays the time taken (in milliseconds) for various operations. Lower bars indicate better performance.</p>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-700">
+                            <thead class="bg-gray-700">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Algorithm Set</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Operation</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Msg Size</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Time (ms)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="perf-results" class="bg-gray-800 divide-y divide-gray-700">
+                                <!-- Results will be populated here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+<script src="js/script.js"></script>
+</body>
+</html>

@@ -1,0 +1,96 @@
+/* Custom Styles for a modern, dark theme */
+body {
+    font-family: 'Inter', sans-serif;
+}
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+.tab-button {
+    transition: all 0.3s ease;
+}
+.tab-button.active {
+    background-color: #4f46e5; /* Indigo 600 */
+    color: white;
+}
+.step-box {
+    transition: all 0.3s ease;
+    border-width: 2px;
+    border-color: #4b5563; /* Gray 600 */
+}
+.step-box.active {
+    border-color: #818cf8; /* Indigo 300 */
+    box-shadow: 0 0 20px rgba(129, 140, 248, 0.7);
+    transform: scale(1.05);
+}
+.connector-line {
+    transition: all 0.3s ease;
+    stroke: #4b5563; /* Gray 600 */
+}
+.connector-line.active {
+    stroke: #4f46e5; /* Indigo 500 */
+}
+.control-button {
+    transition: all 0.3s ease;
+}
+.control-button:disabled {
+    background-color: #374151; /* Gray 700 */
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+code {
+    word-break: break-all;
+}
+
+.chat-mode-button {
+    transition: all 0.3s ease;
+}
+
+.chat-mode-button.active {
+    background-color: #4f46e5; /* Indigo 600 */
+    color: white;
+}
+
+/* Message Inspect Button */
+.message-inspect {
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    color: #9CA3AF;
+    cursor: pointer;
+    font-size: 0.8em;
+    margin-left: 0.5em;
+}
+
+.message-inspect:hover {
+    color: #6366F1;
+}
+
+.message-container:hover .message-inspect {
+    opacity: 1;
+}
+
+/* Modal Styles */
+.modal-enter-active, .modal-leave-active {
+    transition: opacity 0.2s ease;
+}
+
+.modal-enter-from, .modal-leave-to {
+    opacity: 0;
+}
+
+/* Scrollbar Styling */
+#inspect-modal::-webkit-scrollbar {
+    width: 8px;
+}
+
+#inspect-modal::-webkit-scrollbar-track {
+    background: #1F2937;
+    border-radius: 4px;
+}
+
+#inspect-modal::-webkit-scrollbar-thumb {
+    background: #4B5563;
+    border-radius: 4px;
+}
+
+#inspect-modal::-webkit-scrollbar-thumb:hover {
+    background: #6B7280;
+}

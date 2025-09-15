@@ -1,0 +1,23 @@
+{
+  "name": "secure-messaging-simulator",
+  "version": "1.0.0",
+  "description": "A simulator for secure messaging concepts.",
+  "main": "server.js",
+  "scripts": {
+    "start": "nodemon server.js"
+  },
+  "keywords": [
+    "crypto",
+    "security",
+    "messaging"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^4.17.1",
+    "socket.io": "^4.4.1"
+  },
+  "devDependencies": {
+    "nodemon": "^2.0.15"
+  }
+}
