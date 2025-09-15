@@ -1,4 +1,13 @@
 document.addEventListener('DOMContentLoaded', () => {
+    // --- Algorithm Selection ---
+    const algoEncrypt = document.getElementById('algo-encrypt');
+    const algoSign = document.getElementById('algo-sign');
+    const algoHash = document.getElementById('algo-hash');
+    const algoKeyx = document.getElementById('algo-keyx');
+
+    // ECC setup
+    const ec = new elliptic.ec('p256');
+
     // --- Animated Data Flow Icons ---
     const animIconM = document.getElementById('anim-icon-m');
     const animIconH = document.getElementById('anim-icon-h');
@@ -28,7 +37,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 800);
     }
     // State variables
-    let aliceKeys, bobKeys;
+    let aliceKeys = {}, bobKeys = {};
     let message, hashedMessage, signature, sessionKey;
     let encryptedMessage, encryptedSessionKey;
     let currentStep = 0;
@@ -174,16 +183,23 @@ document.addEventListener('DOMContentLoaded', () => {
     const truncate = (str) => str.length > 30 ? str.substring(0, 30) + '...' : str;
 
     buttons.genKeys.addEventListener('click', () => {
-        explanationBox.querySelector('p').textContent = `Generating ${rsaKeySize}-bit RSA keys...`;
+        const encAlgo = algoEncrypt.value;
+        const signAlgo = algoSign.value;
+        const keyxAlgo = algoKeyx.value;
+        explanationBox.querySelector('p').textContent = `Generating keys for selected algorithms...`;
         setTimeout(() => {
-            // Correctly generate separate keys for Alice and Bob
+            // Always generate both RSA and ECC key pairs for both Alice and Bob
+            // RSA
             const aliceCrypt = new JSEncrypt({ default_key_size: rsaKeySize });
-            aliceKeys = { private: aliceCrypt.getPrivateKey(), public: aliceCrypt.getPublicKey() };
-            
+            aliceKeys.rsa = { private: aliceCrypt.getPrivateKey(), public: aliceCrypt.getPublicKey() };
             const bobCrypt = new JSEncrypt({ default_key_size: rsaKeySize });
-            bobKeys = { private: bobCrypt.getPrivateKey(), public: bobCrypt.getPublicKey() };
-            
-            alert('Keys Generated!\n\nAlice\'s Public Key:\n' + aliceKeys.public + '\n\nBob\'s Public Key:\n' + bobKeys.public);
+            bobKeys.rsa = { private: bobCrypt.getPrivateKey(), public: bobCrypt.getPublicKey() };
+            // ECC
+            const aliceEc = ec.genKeyPair();
+            const bobEc = ec.genKeyPair();
+            aliceKeys.ecc = { private: aliceEc.getPrivate('hex'), public: aliceEc.getPublic('hex') };
+            bobKeys.ecc = { private: bobEc.getPrivate('hex'), public: bobEc.getPublic('hex') };
+            alert('Keys Generated!\n\nAlice RSA Public Key:\n' + aliceKeys.rsa.public.substring(0, 100) + '\nAlice ECC Public Key:\n' + aliceKeys.ecc.public.substring(0, 100) + '\n\nBob RSA Public Key:\n' + bobKeys.rsa.public.substring(0, 100) + '\nBob ECC Public Key:\n' + bobKeys.ecc.public.substring(0, 100));
             currentStep = 1;
             updateUI();
         }, 100);
@@ -191,10 +207,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
     buttons.hash.addEventListener('click', () => {
         message = messageInput.value;
-        hashedMessage = CryptoJS.SHA256(message).toString();
+        // Hash selection
+        if (algoHash.value === 'sha256') {
+            hashedMessage = CryptoJS.SHA256(message).toString();
+        } else if (algoHash.value === 'sha512') {
+            hashedMessage = CryptoJS.SHA512(message).toString();
+        } else if (algoHash.value === 'sha3') {
+            hashedMessage = CryptoJS.SHA3(message).toString();
+        }
         outputs.msg.textContent = truncate(message);
         outputs.hash.textContent = truncate(hashedMessage);
-        // Animate M moving to Hash
         animateIcon(
             animIconM,
             steps.msg,
@@ -207,11 +229,17 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     buttons.sign.addEventListener('click', () => {
-        const sign = new JSEncrypt();
-        sign.setPrivateKey(aliceKeys.private);
-        signature = sign.sign(hashedMessage, CryptoJS.SHA256, "sha256");
+        // Signature selection
+        if (algoSign.value === 'rsa') {
+            const sign = new JSEncrypt();
+            sign.setPrivateKey(aliceKeys.rsa.private);
+            signature = sign.sign(hashedMessage, CryptoJS.SHA256, algoHash.value);
+        } else if (algoSign.value === 'ecc') {
+            const key = ec.keyFromPrivate(aliceKeys.ecc.private, 'hex');
+            const sigObj = key.sign(hashedMessage);
+            signature = sigObj.toDER('hex');
+        }
         outputs.sign.textContent = truncate(signature);
-        // Animate H moving to Signature
         animateIcon(
             animIconH,
             steps.hash,
@@ -224,14 +252,41 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     buttons.encrypt.addEventListener('click', () => {
-        sessionKey = CryptoJS.lib.WordArray.random(16).toString(); // 128-bit key
+        // Key Exchange selection
+        if (algoKeyx.value === 'ecc') {
+            // ECDH: derive shared secret
+            const aliceKey = ec.keyFromPrivate(aliceKeys.ecc.private, 'hex');
+            const bobKey = ec.keyFromPrivate(bobKeys.ecc.private, 'hex');
+            sessionKey = aliceKey.derive(bobKey.getPublic()).toString(16).substring(0, 32);
+        } else {
+            sessionKey = CryptoJS.lib.WordArray.random(16).toString(); // 128-bit key
+        }
         const dataToEncrypt = JSON.stringify({ msg: message, sig: signature });
-        encryptedMessage = CryptoJS.AES.encrypt(dataToEncrypt, sessionKey).toString();
-
-        const encrypt = new JSEncrypt();
-        encrypt.setPublicKey(bobKeys.public);
-        encryptedSessionKey = encrypt.encrypt(sessionKey);
-
+        // Encryption selection
+        if (algoEncrypt.value === 'aes') {
+            encryptedMessage = CryptoJS.AES.encrypt(dataToEncrypt, sessionKey).toString();
+            encryptedSessionKey = sessionKey; // For demo, not encrypted
+        } else if (algoEncrypt.value === 'caesar') {
+            encryptedMessage = caesarEncrypt(dataToEncrypt, 3); // shift 3
+            encryptedSessionKey = sessionKey;
+        } else if (algoEncrypt.value === 'shift') {
+            encryptedMessage = shiftEncrypt(dataToEncrypt, 5); // shift 5
+            encryptedSessionKey = sessionKey;
+        } else if (algoEncrypt.value === 'transposition') {
+            encryptedMessage = transpositionEncrypt(dataToEncrypt);
+            encryptedSessionKey = sessionKey;
+        } else if (algoEncrypt.value === 'affine') {
+            encryptedMessage = affineEncrypt(dataToEncrypt, 5, 8); // a=5, b=8
+            encryptedSessionKey = sessionKey;
+        } else if (algoEncrypt.value === 'rsa') {
+            encryptedMessage = CryptoJS.AES.encrypt(dataToEncrypt, sessionKey).toString();
+            const encrypt = new JSEncrypt();
+            encrypt.setPublicKey(bobKeys.rsa.public);
+            encryptedSessionKey = encrypt.encrypt(sessionKey);
+        } else if (algoEncrypt.value === 'ecc') {
+            encryptedMessage = CryptoJS.AES.encrypt(dataToEncrypt, sessionKey).toString();
+            encryptedSessionKey = sessionKey; // For demo, not encrypted
+        }
         outputs.c.textContent = truncate(encryptedMessage);
         outputs.ek.textContent = truncate(encryptedSessionKey);
         currentStep = 4;
@@ -271,45 +326,144 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     buttons.decryptKey.addEventListener('click', () => {
-        const decrypt = new JSEncrypt();
-        decrypt.setPrivateKey(bobKeys.private);
-        const decrypted = decrypt.decrypt(encryptedSessionKey);
+        let decrypted = null;
+        if (algoEncrypt.value === 'rsa') {
+            const decrypt = new JSEncrypt();
+            decrypt.setPrivateKey(bobKeys.rsa.private);
+            decrypted = decrypt.decrypt(encryptedSessionKey);
+        } else if (algoEncrypt.value === 'aes' || algoEncrypt.value === 'ecc' || algoEncrypt.value === 'caesar' || algoEncrypt.value === 'shift' || algoEncrypt.value === 'transposition' || algoEncrypt.value === 'affine') {
+            decrypted = encryptedSessionKey;
+        }
         if (decrypted === sessionKey) {
-             outputs.dec_key.textContent = truncate(decrypted);
-             currentStep = 6;
-             updateUI();
+            outputs.dec_key.textContent = truncate(decrypted);
+            currentStep = 6;
+            updateUI();
         } else {
-             alert('Error: Failed to decrypt session key!');
+            alert('Error: Failed to decrypt session key!');
         }
     });
 
     buttons.decryptMsg.addEventListener('click', () => {
-        let bytes, decryptedData;
+        let decryptedData;
         try {
-            bytes = CryptoJS.AES.decrypt(encryptedMessage, sessionKey);
-            decryptedData = JSON.parse(bytes.toString(CryptoJS.enc.Utf8));
+            if (algoEncrypt.value === 'caesar') {
+                decryptedData = JSON.parse(caesarDecrypt(encryptedMessage, 3));
+            } else if (algoEncrypt.value === 'shift') {
+                decryptedData = JSON.parse(shiftDecrypt(encryptedMessage, 5));
+            } else if (algoEncrypt.value === 'transposition') {
+                decryptedData = JSON.parse(transpositionDecrypt(encryptedMessage));
+            } else if (algoEncrypt.value === 'affine') {
+                decryptedData = JSON.parse(affineDecrypt(encryptedMessage, 5, 8));
+            } else {
+                let bytes = CryptoJS.AES.decrypt(encryptedMessage, sessionKey);
+                decryptedData = JSON.parse(bytes.toString(CryptoJS.enc.Utf8));
+            }
         } catch (e) {
             decryptedData = { msg: '???', sig: '' };
         }
         outputs.dec_msg.textContent = truncate(decryptedData.msg);
-        // Store for verification
         outputs.dec_msg.dataset.fullmsg = decryptedData.msg;
         outputs.dec_msg.dataset.sig = decryptedData.sig;
         currentStep = 7;
         updateUI();
     });
 
+// --- Basic Cipher Implementations ---
+function caesarEncrypt(str, shift) {
+    return str.replace(/[a-z]/gi, c => {
+        const base = c >= 'a' && c <= 'z' ? 97 : 65;
+        return String.fromCharCode(((c.charCodeAt(0) - base + shift) % 26) + base);
+    });
+}
+
+function caesarDecrypt(str, shift) {
+    return str.replace(/[a-z]/gi, c => {
+        const base = c >= 'a' && c <= 'z' ? 97 : 65;
+        return String.fromCharCode(((c.charCodeAt(0) - base - shift + 26) % 26) + base);
+    });
+}
+
+function shiftEncrypt(str, shift) {
+    return str.split('').map(c => String.fromCharCode((c.charCodeAt(0) + shift) % 256)).join('');
+}
+
+function shiftDecrypt(str, shift) {
+    return str.split('').map(c => String.fromCharCode((c.charCodeAt(0) - shift + 256) % 256)).join('');
+}
+
+function transpositionEncrypt(str) {
+    // Simple columnar transposition with 5 columns
+    const numCols = 5;
+    let arr = Array.from({length: numCols}, () => '');
+    for (let i = 0; i < str.length; i++) {
+        arr[i % numCols] += str[i];
+    }
+    return arr.join('');
+}
+
+function transpositionDecrypt(str) {
+    // Properly reverse the columnar transposition with 5 columns
+    const numCols = 5;
+    const numRows = Math.ceil(str.length / numCols);
+    let arr = Array(numRows).fill('');
+    let shortCols = numCols - (str.length % numCols);
+    if (shortCols === numCols) shortCols = 0;
+    let k = 0;
+    for (let col = 0; col < numCols; col++) {
+        let thisColLen = numRows - (col >= numCols - shortCols ? 1 : 0);
+        for (let row = 0; row < thisColLen; row++) {
+            arr[row] += str[k++];
+        }
+    }
+    return arr.join('');
+}
+
+function affineEncrypt(str, a, b) {
+    // Only for letters
+    return str.replace(/[a-z]/gi, c => {
+        const base = c >= 'a' && c <= 'z' ? 97 : 65;
+        return String.fromCharCode(((a * (c.charCodeAt(0) - base) + b) % 26) + base);
+    });
+}
+
+function modInverse(a, m) {
+    // Extended Euclidean Algorithm
+    a = ((a % m) + m) % m;
+    for (let x = 1; x < m; x++) {
+        if ((a * x) % m === 1) return x;
+    }
+    return 1;
+}
+
+function affineDecrypt(str, a, b) {
+    const a_inv = modInverse(a, 26);
+    return str.replace(/[a-z]/gi, c => {
+        const base = c >= 'a' && c <= 'z' ? 97 : 65;
+        return String.fromCharCode(((a_inv * ((c.charCodeAt(0) - base - b + 26)) % 26) + base));
+    });
+}
+
     buttons.verify.addEventListener('click', () => {
         const receivedMsg = outputs.dec_msg.dataset.fullmsg;
         const receivedSig = outputs.dec_msg.dataset.sig;
-        const verify = new JSEncrypt();
-        verify.setPublicKey(aliceKeys.public);
-        const newHash = CryptoJS.SHA256(receivedMsg).toString();
+        let newHash = null;
+        if (algoHash.value === 'sha256') {
+            newHash = CryptoJS.SHA256(receivedMsg).toString();
+        } else if (algoHash.value === 'sha512') {
+            newHash = CryptoJS.SHA512(receivedMsg).toString();
+        }
         let isValid = false;
-        try {
-            isValid = verify.verify(newHash, receivedSig, CryptoJS.SHA256);
-        } catch (e) {
-            isValid = false;
+        if (algoSign.value === 'rsa') {
+            const verify = new JSEncrypt();
+            verify.setPublicKey(aliceKeys.rsa.public);
+            try {
+                isValid = verify.verify(newHash, receivedSig, CryptoJS.SHA256);
+            } catch (e) { isValid = false; }
+        } else if (algoSign.value === 'ecc') {
+            try {
+                const key = ec.keyFromPublic(aliceKeys.ecc.public, 'hex');
+                isValid = key.verify(newHash, receivedSig);
+            } catch (e) { isValid = false; }
         }
         if (mitmEnabled && mitmTampered) {
             outputs.verify.textContent = "INVALID SIGNATURE";
@@ -362,75 +516,111 @@ document.addEventListener('DOMContentLoaded', () => {
         await runTestSet('RSA-4096 / AES-256 / SHA-512', 4096, CryptoJS.lib.WordArray.random(32), CryptoJS.SHA512, 'sha512', testMessage1KB, '1KB');
         await runTestSet('RSA-4096 / AES-256 / SHA-512', 4096, CryptoJS.lib.WordArray.random(32), CryptoJS.SHA512, 'sha512', testMessage1MB, '1MB');
 
+        // --- Basic Cipher Benchmarks ---
+        await runBasicCipherBenchmarks('1KB', testMessage1KB);
+        await runBasicCipherBenchmarks('1MB', testMessage1MB);
+
         perfSpinner.classList.add('hidden');
-    perfStatus.textContent = 'Benchmark complete.';
-    renderPerfChart();
-    renderThroughputChart();
-    renderKeySizeChart();
-    updatePerfAnalysis();
-    // --- Key Size vs. Performance Chart ---
-    function renderKeySizeChart() {
-        // Find relevant results for RSA-2048 and RSA-4096
-        const keySizes = [2048, 4096];
-        const ops = ['Key Generation', 'Signing'];
-        const labels = ['RSA-2048', 'RSA-4096'];
-        // For each key size, get keygen and sign times (1KB row is fine)
-        const keygenTimes = keySizes.map(size => {
-            const row = benchmarkResults.find(r => r.op === `RSA-${size} Gen`);
-            return row ? row.time : 0;
-        });
-        const signTimes = keySizes.map((size, i) => {
-            // Find the sign op for this key size (1KB row is fine)
-            const setName = size === 2048 ? 'RSA-2048 / AES-128 / SHA-256' : 'RSA-4096 / AES-256 / SHA-512';
-            const row = benchmarkResults.find(r => r.set === setName && r.op === 'RSA Sign' && r.size === '1KB');
-            return row ? row.time : 0;
-        });
-        const ctx = perfKeySizeCanvas.getContext('2d');
-        if (perfKeySizeChart) perfKeySizeChart.destroy();
-        perfKeySizeChart = new Chart(ctx, {
-            type: 'bar',
-            data: {
-                labels: labels,
-                datasets: [
-                    {
-                        label: 'Key Generation (ms)',
-                        data: keygenTimes,
-                        backgroundColor: 'rgba(153, 102, 255, 0.7)',
-                        borderColor: 'rgba(153, 102, 255, 1)',
-                        borderWidth: 1
-                    },
-                    {
-                        label: 'Signing (ms)',
-                        data: signTimes,
-                        backgroundColor: 'rgba(255, 159, 64, 0.7)',
-                        borderColor: 'rgba(255, 159, 64, 1)',
-                        borderWidth: 1
-                    }
-                ]
-            },
-            options: {
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        title: {
-                            display: true,
-                            text: 'Time (ms)'
+        perfStatus.textContent = 'Benchmark complete.';
+        renderPerfChart();
+        renderThroughputChart();
+        renderKeySizeChart();
+        updatePerfAnalysis();
+
+        // --- Key Size vs. Performance Chart ---
+        function renderKeySizeChart() {
+            // Find relevant results for RSA-2048 and RSA-4096
+            const keySizes = [2048, 4096];
+            const ops = ['Key Generation', 'Signing'];
+            const labels = ['RSA-2048', 'RSA-4096'];
+            // For each key size, get keygen and sign times (1KB row is fine)
+            const keygenTimes = keySizes.map(size => {
+                const row = benchmarkResults.find(r => r.op === `RSA-${size} Gen`);
+                return row ? row.time : 0;
+            });
+            const signTimes = keySizes.map((size, i) => {
+                // Find the sign op for this key size (1KB row is fine)
+                const setName = size === 2048 ? 'RSA-2048 / AES-128 / SHA-256' : 'RSA-4096 / AES-256 / SHA-512';
+                const row = benchmarkResults.find(r => r.set === setName && r.op === 'RSA Sign' && r.size === '1KB');
+                return row ? row.time : 0;
+            });
+            const ctx = perfKeySizeCanvas.getContext('2d');
+            if (perfKeySizeChart) perfKeySizeChart.destroy();
+            perfKeySizeChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Key Generation (ms)',
+                            data: keygenTimes,
+                            backgroundColor: 'rgba(153, 102, 255, 0.7)',
+                            borderColor: 'rgba(153, 102, 255, 1)',
+                            borderWidth: 1
+                        },
+                        {
+                            label: 'Signing (ms)',
+                            data: signTimes,
+                            backgroundColor: 'rgba(255, 159, 64, 0.7)',
+                            borderColor: 'rgba(255, 159, 64, 1)',
+                            borderWidth: 1
                         }
-                    }
+                    ]
                 },
-                plugins: {
-                    tooltip: {
-                        callbacks: {
-                            label: function(context) {
-                                return `${context.dataset.label}: ${context.raw.toFixed(2)} ms`;
+                options: {
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Time (ms)'
+                            }
+                        }
+                    },
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return `${context.dataset.label}: ${context.raw.toFixed(2)} ms`;
+                                }
                             }
                         }
                     }
                 }
-            }
-        });
+            });
+        }
     }
-}
+
+    // Add basic ciphers to benchmark
+    async function runBasicCipherBenchmarks(sizeLabel, message) {
+        // Caesar
+        let start = performance.now();
+        let enc = caesarEncrypt(message, 3);
+        let dec = caesarDecrypt(enc, 3);
+        let end = performance.now();
+        addPerfRow('Basic Ciphers', 'Caesar Encrypt+Decrypt', sizeLabel, (end - start).toFixed(2));
+
+        // Shift
+        start = performance.now();
+        enc = shiftEncrypt(message, 5);
+        dec = shiftDecrypt(enc, 5);
+        end = performance.now();
+        addPerfRow('Basic Ciphers', 'Shift Encrypt+Decrypt', sizeLabel, (end - start).toFixed(2));
+
+        // Transposition
+        start = performance.now();
+        enc = transpositionEncrypt(message);
+        dec = transpositionDecrypt(enc);
+        end = performance.now();
+        addPerfRow('Basic Ciphers', 'Transposition Encrypt+Decrypt', sizeLabel, (end - start).toFixed(2));
+
+        // Affine
+        start = performance.now();
+        enc = affineEncrypt(message, 5, 8);
+        dec = affineDecrypt(enc, 5, 8);
+        end = performance.now();
+        addPerfRow('Basic Ciphers', 'Affine Encrypt+Decrypt', sizeLabel, (end - start).toFixed(2));
+    }
     // --- Throughput Chart ---
     function renderThroughputChart() {
         // Only use 1MB results for throughput
